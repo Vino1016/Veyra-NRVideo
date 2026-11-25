@@ -21,6 +21,7 @@ VPage {
     signal requestDialog(string key)
     signal requestInspector(int nodeIndex, string nodeType)
     signal requestFullscreen()
+    signal requestVideoWindow()
 
     // Fullscreen quick-adjust (Home, Main.qml): only the canvas is shown, as a
     // panel along the bottom of the picture, cut out of the native video window.
@@ -410,6 +411,26 @@ VPage {
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsH3
                 }
+                // 分离画面: the picture is in its own window.
+                Column {
+                    objectName: "node-video-detached"
+                    anchors.centerIn: parent
+                    spacing: 10
+                    visible: veyra.hasSource && root.shell !== null && root.shell.videoInWindow === true
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: qsTr("画面已在独立窗口中显示")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsH3
+                    }
+                    VButton {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        iconName: "external"
+                        text: qsTr("收回画面")
+                        onClicked: root.requestVideoWindow()
+                    }
+                }
             }
 
             // .nv-bar: transport, then the stats strip.
@@ -528,12 +549,25 @@ VPage {
                         showLabels: false
                         spacing: 6
                     }
-                    VButton {
+                    // Fullscreen and 分离画面 share one grid cell, so the column
+                    // numbers of everything after them stay as they were.
+                    RowLayout {
                         Layout.row: 0; Layout.column: statsBar.compact ? 5 : 6
-                        objectName: "node-fullscreen"
-                        icon: true; iconName: "max"
-                        tip: qsTr("全屏画面（双击画面 / F11）")
-                        onClicked: root.requestFullscreen()
+                        spacing: 8
+                        VButton {
+                            objectName: "node-fullscreen"
+                            icon: true; iconName: "max"
+                            tip: qsTr("全屏画面（双击画面 / F11）")
+                            onClicked: root.requestFullscreen()
+                        }
+                        VButton {
+                            objectName: "node-video-window"
+                            readonly property bool detached: root.shell !== null && root.shell.videoInWindow === true
+                            icon: true; iconName: "external"
+                            primary: detached
+                            tip: detached ? qsTr("收回画面") : qsTr("分离画面到独立窗口")
+                            onClicked: root.requestVideoWindow()
+                        }
                     }
                     // .viewtog: 列表 asks first (the list configuration comes back).
                     VSeg {

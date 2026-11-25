@@ -22,6 +22,7 @@ VPage {
     signal requestPage(string page)
     signal requestDialog(string key)
     signal requestFullscreen()
+    signal requestVideoWindow()
     // Fullscreen quick-adjust (Home, Main.qml): only the inspector is shown, moved
     // to the left of the picture, cut out of the native video window.
     property bool overlay: false
@@ -708,6 +709,27 @@ VPage {
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsH3
             }
+            // 分离画面: the picture is in its own window; this card says so and
+            // takes it back on a click.
+            Column {
+                objectName: "pro-video-detached"
+                anchors.centerIn: parent
+                spacing: 10
+                visible: veyra.hasSource && root.shell !== null && root.shell.videoInWindow === true
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: qsTr("画面已在独立窗口中显示")
+                    color: Theme.t2
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsH3
+                }
+                VButton {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    iconName: "external"
+                    text: qsTr("收回画面")
+                    onClicked: root.requestVideoWindow()
+                }
+            }
         }
 
         // Transport controls; source/output details are in the header.
@@ -878,6 +900,18 @@ VPage {
                     highlighted: proAudioMenu.monitorOff
                     visible: veyra.hasSource && (!veyra.isCapture || proAudioMenu.captureSource)
                     onTapped: proAudioMenu.openAt(proAudioButton, "up")
+                }
+                // 分离画面: the picture in its own window (a second monitor), or back here.
+                Item {
+                    id: detachButton
+                    objectName: "pro-video-window"
+                    implicitWidth: 28; implicitHeight: 28
+                    readonly property bool detached: root.shell !== null && root.shell.videoInWindow === true
+                    VIcon { anchors.centerIn: parent; name: "external"; color: detachButton.detached ? Theme.accent : detachHover.hovered ? Theme.t1 : Theme.t2 }
+                    HoverHandler { id: detachHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: root.requestVideoWindow() }
+                    ToolTip.visible: detachHover.hovered
+                    ToolTip.text: detachButton.detached ? qsTr("收回画面") : qsTr("分离画面到独立窗口")
                 }
                 // Fullscreen, at the picture's bottom-right corner where players put it.
                 Item {

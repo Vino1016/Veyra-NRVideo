@@ -249,6 +249,9 @@ Window {
         // and the controls float above it in their own window (FullscreenBar).
         if ((fullscreen || (maximized && page === "min")) && page !== "home" && page !== "set")
             return { x: 0, y: 0, width: width, height: height }
+        // 分离画面: the picture is in VideoWindow.qml; nothing here is covered.
+        if (videoInWindow && (page === "pro" || page === "node"))
+            return { x: 0, y: 0, width: 0, height: 0 }
         switch (page) {
         case "min":
             // .min .stage: full width, height = the picture height.
@@ -303,6 +306,7 @@ Window {
             onboardingActive: root.onboardingActive
             overlay: root.quickPanelShown && root.page === "pro"
             onRequestFullscreen: root.toggleFullscreen()
+            onRequestVideoWindow: root.toggleVideoWindow()
             onRequestPage: p => root.goPage(p)
             onRequestDialog: key => dialogs.open(key)
         }
@@ -316,6 +320,7 @@ Window {
             overlay: root.quickPanelShown && root.page === "node"
             onVideoHeightEdited: h => { root.nodeVideoHeight = h; videoHost.syncRect() }
             onRequestFullscreen: root.toggleFullscreen()
+            onRequestVideoWindow: root.toggleVideoWindow()
             onRequestPage: p => root.goPage(p)
             onRequestDialog: key => dialogs.open(key)
             onRequestInspector: (index, type) => {
@@ -472,6 +477,23 @@ Window {
     // Keep cinema sizing out of that native transition, without a polling timer.
     property bool fullRestorePending: false
     property bool fullLocked: false
+    // 分离画面 (professional list and node pages): the picture moves to
+    // VideoWindow.qml, e.g. on a second monitor. main.cpp reads videoInWindow to
+    // pick the native video window's parent. Other pages, and fullscreen of this
+    // window, take the picture back while the independent window stays open.
+    // Mask drawing, exclusion moves and the screen-crop editor take their input on
+    // this window's picture, so the picture comes back here while one is active.
+    readonly property bool videoInWindow: videoWindow.visible && !fullscreen
+        && (shownPage === "pro" || shownPage === "node")
+        && !screenCrop.editing && veyra.protectionDrawShape.length === 0
+        && !veyra.exclusionOverlayVisible
+    onVideoInWindowChanged: {
+        veyra.logUi("ui-video-window", "picture in independent window=" + videoInWindow)
+        videoHost.syncRect()
+    }
+    function detachVideo() { videoWindow.open() }
+    function dockVideo() { videoWindow.dock(); videoHost.syncRect() }
+    function toggleVideoWindow() { if (videoWindow.visible) dockVideo(); else detachVideo() }
     // Fullscreen quick-adjust panel (Home): the professional mode's own controls
     // over the picture - the list inspector (with the performance orbs) in list
     // mode, the node canvas along the bottom in node mode (veyra.nodeMode). From
@@ -762,6 +784,12 @@ Window {
         onAddFiles: veyra.addPlaylistFilesDialog()
         onAddFolder: veyra.addPlaylistFolderDialog()
         onClearRecentFiles: veyra.clearRecentFiles()
+    }
+    VideoWindow {
+        id: videoWindow
+        owner: root
+        pictureHere: root.videoInWindow
+        onDockRequested: root.dockVideo()
     }
     FullscreenBar {
         id: fullBar
@@ -1100,6 +1128,10 @@ Window {
         if (root.test.tab !== undefined) proPage.tab = root.test.tab
         if (root.testAspect > 0) root.fitToFilm(root.testAspect)
         if (root.test.dialog !== undefined) dialogs.open(root.test.dialog)
+        // 分离画面 was on when Veyra closed: open the window again (on its saved
+        // monitor, or the default one if that monitor is gone).
+        if (videoWindow.restoreDetached && root.test.portableUpdateProbe !== true)
+            Qt.callLater(function() { videoWindow.open() })
         videoHost.syncRect()
         // Independent of animation, palette, reduced motion and initial page. Never restart.
         if (root.musicOn && vyMusic.available && !veyra.hasSource && !veyra.openingSource) {

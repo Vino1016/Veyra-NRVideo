@@ -124,6 +124,69 @@ bool g_videoHiddenByProbe = false;
 // connect after a capture card left the card's last frame up for 20 s and the
 // window looked frozen (field report 2026-10-01).
 bool g_videoBlanked = false;
+// The last rectangle and region handed to the window manager. They belong to the
+// current parent's coordinates, so moving the video to another top-level window
+// (分离画面) clears them and the next pass places the window afresh.
+RECT g_lastVideoRect{-1, -1, -1, -1};
+QList<QRect> g_lastVideoRegion;
+
+// The video's host: a top-level QML window and the item whose rectangle it fills.
+// The main window hosts it on its "videoHost" item; with 分离画面 on, the
+// independent VideoWindow.qml hosts it on "detachedVideoHost". There is still one
+// native window and one swapchain; only its parent changes.
+struct VideoHost {
+    QQuickWindow* window = nullptr;
+    QQuickItem* item = nullptr;
+    bool detached = false;
+};
+
+HWND nativeHandle(QQuickWindow* window) {
+    return window ? reinterpret_cast<HWND>(window->winId()) : nullptr;
+}
+
+VideoHost desiredVideoHost(QQuickWindow* main) {
+    static QPointer<QQuickItem> mainItem;
+    static QPointer<QQuickWindow> detachedWindow;
+    static QPointer<QQuickItem> detachedItem;
+    if (!main) return {};
+    if (!mainItem) mainItem = main->findChild<QQuickItem*>(QStringLiteral("videoHost"));
+    if (main->property("videoInWindow").toBool()) {
+        if (!detachedWindow) detachedWindow = main->findChild<QQuickWindow*>(QStringLiteral("videoWindow"));
+        if (detachedWindow && !detachedItem)
+            detachedItem = detachedWindow->findChild<QQuickItem*>(QStringLiteral("detachedVideoHost"));
+        if (detachedWindow && detachedItem && detachedWindow->isVisible())
+            return {detachedWindow, detachedItem, true};
+    }
+    return {main, mainItem, false};
+}
+
+// Makes the video a child of `parent`. The HWND, its class and the engine's
+// swapchain stay; the presenter sees a new client size and monitor on its next
+// frame and takes its existing resize/display-change path. Hidden for the move so
+// the old rectangle never shows in the new parent; the geometry pass that follows
+// shows it again at the new place.
+bool attachVideo(HWND parent, const char* why) {
+    if (!g_video || !parent) return false;
+    const HWND old = GetParent(g_video);
+    if (old == parent) return true;
+    if (old) ShowWindow(g_video, SW_HIDE);
+    SetLastError(0);
+    const HWND previous = SetParent(g_video, parent);
+    const DWORD error = previous == nullptr ? GetLastError() : 0;
+    // SetParent alone leaves the popup style in place; a child style is what
+    // makes the window clip to its parent and behave as part of the layout.
+    const LONG_PTR style = GetWindowLongPtrW(g_video, GWL_STYLE);
+    SetWindowLongPtrW(g_video, GWL_STYLE, (style & ~(WS_POPUP)) | WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+    g_lastVideoRect = RECT{-1, -1, -1, -1};
+    g_lastVideoRegion.clear();
+    // The old scene's cover holes do not apply in the new one.
+    SetWindowRgn(g_video, nullptr, TRUE);
+    g_videoBlanked = false;
+    const bool ok = GetParent(g_video) == parent;
+    veyra::log::info("qml-window", std::format("video parent -> {} ({}) hadParent={} ok={} error={}",
+        static_cast<void*>(parent), why, old != nullptr, ok, error));
+    return ok;
+}
 
 void blankVideo(const char* why) {
     if (!g_video || g_videoBlanked) return;
@@ -256,7 +319,7 @@ bool syncVideoGeometry(QQuickWindow* window, QQuickItem* host) {
     }
     // Called every rendered frame: only a changed rect reaches the window manager,
     // so a moving popover never makes the presenter see a spurious resize.
-    static RECT last{-1, -1, -1, -1};
+    RECT& last = g_lastVideoRect;
     if (IsWindowVisible(g_video) && last.left == x && last.top == y && last.right == w && last.bottom == h) return true;
     last = RECT{x, y, w, h};
     SetLastError(0);
@@ -343,7 +406,7 @@ void syncVideoCovers(QQuickWindow* window, QQuickItem* host, qreal inset) {
     }
     const int w = std::max(1L, nativeClient.right);
     const int h = std::max(1L, nativeClient.bottom);
-    static QList<QRect> last;
+    QList<QRect>& last = g_lastVideoRegion;
     // blankVideo() set the region behind this cache's back.
     if (g_videoBlanked) { last.clear(); g_videoBlanked = false; }
     QList<QRect> holes;       // x, y, w, h; the radius rides along as a fifth rect
@@ -1153,8 +1216,13 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // explicit handler is to close it and exit on the last window, which does run
     // teardown; this makes it explicit so a harness can also ask for a clean exit
     // with --exit-after and get the same, complete log either way.
-    QObject::connect(window, &QQuickWindow::closing, &app, [](QQuickCloseEvent*) {
+    QObject::connect(window, &QQuickWindow::closing, &app, [window](QQuickCloseEvent*) {
         veyra::log::info("qml", "closing: quitting the application loop");
+        // 分离画面: a child HWND is destroyed with its parent. Bring the video back
+        // under the main window before Qt tears down VideoWindow.qml, so the engine's
+        // swapchain target outlives every QML window and is destroyed last, as before.
+        if (g_video && GetParent(g_video) && GetParent(g_video) != nativeHandle(window))
+            attachVideo(nativeHandle(window), "closing");
         // Flush before quitting: the file sink is a 64 KB _IOFBF buffer, so a run
         // that ends without this loses its last lines (the exact ones a headless
         // check is looking for). closeFile() at teardown would also flush, but a
@@ -1213,7 +1281,14 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // swapchain from a 1x1 window. The native calls only run when a value changed.
     auto follow = [window, &bridge] {
         if (!g_video) return;
-        syncVideoCursor(window->property("fullscreenCursorHidden").toBool());
+        const VideoHost target = desiredVideoHost(window);
+        // 分离画面: move the one video window between the main window and
+        // VideoWindow.qml. Only once the pre-open hook attached it: an unattached
+        // popup is never reparented here (see below).
+        if (target.window && GetParent(g_video) != nullptr && GetParent(g_video) != nativeHandle(target.window))
+            attachVideo(nativeHandle(target.window), target.detached ? "detach" : "dock");
+        QQuickWindow* hostWindow = target.window ? target.window : window;
+        syncVideoCursor(hostWindow->property("fullscreenCursorHidden").toBool());
         // Only the pre-open hook attaches the popup and converts it to WS_CHILD.
         // GetParent() is null for an unattached WS_POPUP, so reparenting here on
         // every animation frame can starve input and timers before any source opens.
@@ -1227,13 +1302,14 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             }
             return;
         }
-        static QPointer<QQuickItem> host;
-        if (!host) {
-            host = window->findChild<QQuickItem*>(QStringLiteral("videoHost"));
+        QQuickItem* host = target.item;
+        static bool reported = false;
+        if (!host || !reported) {
+            reported = host != nullptr;
             // Report the search: "the log is silent" and "the lookup failed" look
             // identical otherwise.
-            veyra::log::info("qml", std::format("video host lookup: found={} contentChildren={}",
-                                                host != nullptr,
+            veyra::log::info("qml", std::format("video host lookup: found={} detached={} contentChildren={}",
+                                                host != nullptr, target.detached,
                                                 window->contentItem() ? window->contentItem()->childItems().size() : -1));
             if (!host) return;
         }
@@ -1243,17 +1319,25 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         const int w = int(host->width()), h = int(host->height());
         if (w != lastW || h != lastH) {
             lastW = w; lastH = h;
-            veyra::log::info("qml", std::format("video host geometry {}x{} at {},{}",
-                                                w, h, int(host->x()), int(host->y())));
+            veyra::log::info("qml", std::format("video host geometry {}x{} at {},{} detached={}",
+                                                w, h, int(host->x()), int(host->y()), target.detached));
         }
-        if (syncVideoGeometry(window, host))
-            syncVideoCovers(window, host, sceneInsetFraction(window));
+        if (syncVideoGeometry(hostWindow, host))
+            syncVideoCovers(hostWindow, host, target.detached ? 0.0 : sceneInsetFraction(hostWindow));
     };
     // Hold-to-compare (V by default) is the bridge's application event filter:
     // the key is rebindable (设置 → 快捷键) and can be switched off (显示 →
     // 按住 V 查看原画). A second hard-wired V filter here used to override both.
     QObject::connect(window, &QQuickWindow::afterAnimating, &app, follow);
     QObject::connect(&bridge, &ui::QmlPlayerBridge::snapshotChanged, &app, follow);
+    // 分离画面: the independent window's own frames move and resize its host, and
+    // its showing/hiding is when the video changes parent.
+    if (auto* videoWindow = window->findChild<QQuickWindow*>(QStringLiteral("videoWindow"))) {
+        QObject::connect(videoWindow, &QQuickWindow::afterAnimating, &app, follow);
+        QObject::connect(videoWindow, &QWindow::visibleChanged, &app, [follow](bool) { QTimer::singleShot(0, follow); });
+    } else {
+        veyra::log::warn("qml-window", "video window not found: 分离画面 unavailable");
+    }
     // The first frame may come before the page layout settles; one pass after the
     // event loop starts covers a scene that then never animates.
     QTimer::singleShot(0, &app, follow);
@@ -1322,25 +1406,20 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // Before every open, place the native window and force the pending layout to
     // be applied so the client size the presenter reads is the real one.
     bridge.setPreOpenHook([window, &bridge] {
-        auto* host = window->findChild<QQuickItem*>(QStringLiteral("videoHost"));
-        veyra::log::info("qml", std::format("pre-open: host={} size={}x{} contentChildren={}",
-                                            host != nullptr,
+        const VideoHost target = desiredVideoHost(window);
+        QQuickWindow* hostWindow = target.window ? target.window : window;
+        QQuickItem* host = target.item;
+        veyra::log::info("qml", std::format("pre-open: host={} detached={} size={}x{} contentChildren={}",
+                                            host != nullptr, target.detached,
                                             host ? int(host->width()) : -1,
                                             host ? int(host->height()) : -1,
                                             window->contentItem() ? window->contentItem()->childItems().size() : -1));
         // Parent first: a WS_CHILD window without a parent is not realized, so its
         // rect stays 0x0 and any SetWindowPos is discarded. Reparenting here, not
         // on a later timer tick, is what lets the geometry below take effect.
-        if (GetParent(g_video) == nullptr) {
-            const HWND parent = reinterpret_cast<HWND>(window->winId());
-            SetParent(g_video, parent);
-            // SetParent alone leaves the popup style in place; a child style is what
-            // makes the window clip to its parent and behave as part of the layout.
-            const LONG_PTR style = GetWindowLongPtrW(g_video, GWL_STYLE);
-            SetWindowLongPtrW(g_video, GWL_STYLE,
-                              (style & ~(WS_POPUP)) | WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
-        }
-        const bool validHost = host && syncVideoGeometry(window, host);
+        // attachVideo() also applies the child style SetParent alone leaves out.
+        attachVideo(nativeHandle(hostWindow), target.detached ? "pre-open detached" : "pre-open");
+        const bool validHost = host && syncVideoGeometry(hostWindow, host);
         if (!validHost) {
             veyra::log::error("qml-window", "pre-open: video host has no valid client rectangle");
             return;

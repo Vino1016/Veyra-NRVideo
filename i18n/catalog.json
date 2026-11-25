@@ -4993,6 +4993,19 @@
    "ru": "Veyra запускается или закрывается. Подождите немного и повторите попытку."
   },
   {
+   "zh": "Veyra 画面",
+   "src": "qml/VideoWindow.qml",
+   "zh-TW": "Veyra 畫面",
+   "en": "Veyra Picture",
+   "ja": "Veyra 映像",
+   "ko": "Veyra 화면",
+   "es": "Veyra · Imagen",
+   "fr": "Veyra · Image",
+   "de": "Veyra · Bild",
+   "pt-BR": "Veyra · Imagem",
+   "ru": "Veyra · Изображение"
+  },
+  {
    "zh": "Veyra 的屏幕捕获已移除鼠标穿透，仅保留用于观看视频的窗口和显示器采集。",
    "src": "qml/DialogHost.qml",
    "zh-TW": "Veyra 的螢幕擷取已移除滑鼠穿透，僅保留用於觀看影片的視窗與顯示器擷取。",
@@ -10244,6 +10257,19 @@
    "de": "Mitteltöne teilen",
    "pt-BR": "Meios-tons divididos",
    "ru": "Раздельные средние тона"
+  },
+  {
+   "zh": "分离画面到独立窗口",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "將畫面分離到獨立視窗",
+   "en": "Move the picture to its own window",
+   "ja": "映像を別ウィンドウに切り離す",
+   "ko": "화면을 별도 창으로 분리",
+   "es": "Mover la imagen a una ventana propia",
+   "fr": "Déplacer l'image dans sa propre fenêtre",
+   "de": "Bild in eigenes Fenster verschieben",
+   "pt-BR": "Mover a imagem para uma janela própria",
+   "ru": "Вынести изображение в отдельное окно"
   },
   {
    "zh": "分离阴影",
@@ -16942,7 +16968,7 @@
   },
   {
    "zh": "已关闭当前硬件或包不支持的效果，参数仍保留：",
-   "src": "src/ui/bridge/Preferences.cpp",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已關閉目前硬體或套件不支援的效果，參數仍保留：",
    "en": "Unavailable effects have been disabled; their parameters are preserved: ",
    "ja": "非対応の効果を無効にしました。設定値は保持されています：",
@@ -22101,6 +22127,19 @@
    "de": "Schwarze Frames erhalten · Überprüfen Sie den Eingabemodus",
    "pt-BR": "Molduras pretas recebidas · Verificar o modo de entrada",
    "ru": "Полученные черные фреймы · Проверьте режим ввода"
+  },
+  {
+   "zh": "收回画面",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "收回畫面",
+   "en": "Bring the picture back",
+   "ja": "映像を戻す",
+   "ko": "화면 되돌리기",
+   "es": "Recuperar la imagen",
+   "fr": "Rapatrier l'image",
+   "de": "Bild zurückholen",
+   "pt-BR": "Trazer a imagem de volta",
+   "ru": "Вернуть изображение"
   },
   {
    "zh": "收起",
@@ -27511,6 +27550,19 @@
    "ru": "Подключение к Xbox..."
   },
   {
+   "zh": "正在连接…",
+   "src": "qml/VideoWindow.qml",
+   "zh-TW": "正在連線…",
+   "en": "Connecting…",
+   "ja": "接続中…",
+   "ko": "연결 중…",
+   "es": "Conectando…",
+   "fr": "Connexion…",
+   "de": "Verbinde…",
+   "pt-BR": "Conectando…",
+   "ru": "Подключение…"
+  },
+  {
    "zh": "正在连接串流主机…",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "正在連接串流主機…",
@@ -28029,6 +28081,19 @@
    "de": "Keine Untertitel im Bild",
    "pt-BR": "Nenhuma legenda na tela",
    "ru": "Субтитров на экране нет"
+  },
+  {
+   "zh": "没有画面 · 在主窗口打开片源",
+   "src": "qml/VideoWindow.qml",
+   "zh-TW": "沒有畫面 · 請在主視窗開啟片源",
+   "en": "No picture · Open a source in the main window",
+   "ja": "映像なし · メインウィンドウでソースを開いてください",
+   "ko": "화면 없음 · 메인 창에서 소스를 여세요",
+   "es": "Sin imagen · Abre una fuente en la ventana principal",
+   "fr": "Aucune image · Ouvrez une source dans la fenêtre principale",
+   "de": "Kein Bild · Öffne eine Quelle im Hauptfenster",
+   "pt-BR": "Sem imagem · Abra uma fonte na janela principal",
+   "ru": "Нет изображения · Откройте источник в главном окне"
   },
   {
    "zh": "没有读到字幕数据（请检查封装或压缩支持）",
@@ -29253,6 +29318,19 @@
    "ru": "Изменился размер кадра или HDR режим; запись продолжается в новом файле"
   },
   {
+   "zh": "画面已在独立窗口中显示",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "畫面已在獨立視窗中顯示",
+   "en": "The picture is shown in its own window",
+   "ja": "映像は別ウィンドウに表示されています",
+   "ko": "화면이 별도 창에 표시되고 있습니다",
+   "es": "La imagen se muestra en su propia ventana",
+   "fr": "L'image est affichée dans sa propre fenêtre",
+   "de": "Das Bild wird in einem eigenen Fenster angezeigt",
+   "pt-BR": "A imagem está sendo exibida em uma janela própria",
+   "ru": "Изображение показано в отдельном окне"
+  },
+  {
    "zh": "画面引擎无响应，已记录诊断信息；如画面未恢复，请关闭软件后重新打开",
    "src": "include/veyra/engine/EngineWatchdog.h",
    "zh-TW": "畫面引擎無回應，已記錄診斷資訊；如畫面未恢復，請關閉軟體後重新開啟",
@@ -29316,6 +29394,19 @@
    "de": "Text im Bild (Capture-Karte / PS5-Untertitel)",
    "pt-BR": "Texto na tela (placa de captura / legendas do PS5)",
    "ru": "Текст на экране (карта захвата / субтитры PS5)"
+  },
+  {
+   "zh": "画面暂时回到主窗口 · 返回专业模式后显示在这里",
+   "src": "qml/VideoWindow.qml",
+   "zh-TW": "畫面暫時回到主視窗 · 回到專業模式後會顯示在這裡",
+   "en": "The picture is in the main window for now · It returns here in Pro mode",
+   "ja": "映像は一時的にメインウィンドウにあります · プロモードに戻るとここに表示されます",
+   "ko": "화면이 잠시 메인 창에 있습니다 · 프로 모드로 돌아가면 여기에 표시됩니다",
+   "es": "La imagen está en la ventana principal por ahora · Vuelve aquí en el modo profesional",
+   "fr": "L'image est pour l'instant dans la fenêtre principale · Elle revient ici en mode pro",
+   "de": "Das Bild ist vorerst im Hauptfenster · Im Profi-Modus erscheint es wieder hier",
+   "pt-BR": "A imagem está na janela principal por enquanto · Ela volta para cá no modo profissional",
+   "ru": "Изображение временно в главном окне · В профессиональном режиме оно вернётся сюда"
   },
   {
    "zh": "画面未收齐即可开始传输。持续丢帧时按原格式切回普通采集。重新连接后生效。",
